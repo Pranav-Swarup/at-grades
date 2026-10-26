@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Course Totals — Statistics</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:   #fcfcfb;
+    --page:        #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:       #898781;
+    --grid:        #e1e0d9;
+    --baseline:    #c3c2b7;
+    --series-1:    #2a78d6;
+    --series-1-wash: rgba(42, 120, 214, 0.10);
+    --series-1-dot:  rgba(42, 120, 214, 0.45);
+    --border:      rgba(11,11,11,0.10);
+    --ring:        #fcfcfb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:   #1a1a19;
+      --page:        #0d0d0d;
+      --text-primary:   #f0efec;
+      --text-secondary: #c3c2b7;
+      --muted:       #898781;
+      --grid:        #2c2c2a;
+      --baseline:    #383835;
+      --series-1:    #3987e5;
+      --series-1-wash: rgba(57, 135, 229, 0.14);
+      --series-1-dot:  rgba(57, 135, 229, 0.5);
+      --border:      rgba(255,255,255,0.10);
+      --ring:        #1a1a19;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:   #1a1a19;
+    --page:        #0d0d0d;
+    --text-primary:   #f0efec;
+    --text-secondary: #c3c2b7;
+    --muted:       #898781;
+    --grid:        #2c2c2a;
+    --baseline:    #383835;
+    --series-1:    #3987e5;
+    --series-1-wash: rgba(57, 135, 229, 0.14);
+    --series-1-dot:  rgba(57, 135, 229, 0.5);
+    --border:      rgba(255,255,255,0.10);
+    --ring:        #1a1a19;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  header.page { margin-bottom: 22px; }
+  h1 { font-size: 22px; font-weight: 650; margin: 0 0 6px; }
+  .sub { color: var(--text-secondary); font-size: 14px; margin: 0; }
+  .note {
+    margin-top: 12px; font-size: 12.5px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; background: var(--surface-1);
+  }
+
+  .tiles {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px; margin: 22px 0 30px;
+  }
+  .tile {
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface-1); padding: 12px 14px;
+  }
+  .tile__label { font-size: 11.5px; color: var(--text-secondary); margin: 0 0 4px; }
+  .tile__value { font-size: 20px; font-weight: 650; margin: 0; }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+  }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    border: 1px solid var(--border); border-radius: 12px;
+    background: var(--surface-1); padding: 16px 18px 10px;
+    min-width: 0;
+  }
+  .card--wide { grid-column: 1 / -1; }
+  .card__title { font-size: 14.5px; font-weight: 600; margin: 0 0 2px; }
+  .card__sub { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
+  .card svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+  .controls { display: flex; gap: 6px; margin-bottom: 10px; }
+  .controls button {
+    font: inherit; font-size: 12px; color: var(--text-secondary);
+    background: transparent; border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 11px; cursor: pointer;
+  }
+  .controls button.is-active {
+    color: var(--text-primary); border-color: var(--series-1); background: var(--series-1-wash);
+  }
+
+  text { fill: var(--muted); font-size: 10.5px; font-family: inherit; }
+  .axis-line { stroke: var(--baseline); stroke-width: 1; }
+  .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .mark-line { stroke: var(--series-1); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .mark-fill { fill: var(--series-1-wash); }
+  .mark-bar { fill: var(--series-1); }
+  .mark-dot { fill: var(--series-1-dot); stroke: var(--ring); stroke-width: 2; }
+  .ref-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .hover-rect { fill: transparent; }
+  .hover-rect:hover, .hover-rect.is-hover { fill: var(--series-1-wash); }
+  .crosshair { stroke: var(--muted); stroke-width: 1; pointer-events: none; opacity: 0; }
+
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 50;
+    background: var(--text-primary); color: var(--page);
+    font-size: 12px; line-height: 1.4; padding: 7px 10px; border-radius: 7px;
+    transform: translate(-50%, calc(-100% - 10px)); opacity: 0; transition: opacity 80ms ease;
+    max-width: 220px; white-space: nowrap;
+  }
+  #tooltip .tt-strong { font-weight: 700; }
+  #tooltip.show { opacity: 1; }
+
+  .meter { margin-bottom: 14px; }
+  .meter__head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 5px; }
+  .meter__name { color: var(--text-primary); font-weight: 600; }
+  .meter__value { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .meter__track { height: 10px; border-radius: 999px; background: var(--series-1-wash); overflow: hidden; }
+  .meter__fill { height: 100%; border-radius: 999px; background: var(--series-1); }
+
+  .cutoff-handle { cursor: ew-resize; }
+  .cutoff-handle circle { fill: var(--text-primary); stroke: var(--page); stroke-width: 2; }
+  .cutoff-line { stroke: var(--text-primary); stroke-width: 2; stroke-dasharray: 4 3; }
+  .cutoff-label { font-weight: 700; fill: var(--text-primary); }
+  #bucketTable input[type="text"] {
+    font: inherit; font-size: 12.5px; width: 100%; box-sizing: border-box;
+    background: transparent; color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px;
+  }
+  #bucketTable button.rm {
+    font: inherit; font-size: 11px; color: var(--text-secondary);
+    background: transparent; border: 1px solid var(--border); border-radius: 999px;
+    padding: 1px 8px; cursor: pointer;
+  }
+
+  details.tbl { margin-top: 26px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+  table { border-collapse: collapse; margin-top: 10px; font-size: 12.5px; width: 100%; }
+  th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  th { color: var(--text-secondary); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <h1>Course totals — statistical visualisations</h1>
+    <p class="sub">n = 285 · fully anonymised — no names, roll numbers, or per-student records anywhere on this page.</p>
+    <p class="note">No cutoffs are pre-set by this page. The bucket tool below only shows the counts a cutoff <em>you</em> choose and drag would produce — it doesn't suggest where to draw one.</p>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card card--wide" style="margin-bottom:16px;">
+    <p class="card__title">Grade-bucket explorer</p>
+    <p class="card__sub">Drag the handles (or type a value) to add cutoffs on the course-total distribution and see how many students fall in each bucket — purely a what-if tool, nothing here is a recommendation.</p>
+    <div class="controls">
+      <button type="button" id="addCutoff">+ add cutoff</button>
+    </div>
+    <svg id="chartCutoff" viewBox="0 0 1160 260"></svg>
+    <table id="bucketTable" style="margin-top:4px;"></table>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <div class="controls" id="histControls"></div>
+      <p class="card__title">Histogram + density estimate</p>
+      <p class="card__sub">Frequency by score band, with a smoothed density curve overlaid</p>
+      <svg id="chartHist" viewBox="0 0 560 300"></svg>
+    </div>
+
+    <div class="card">
+      <p class="card__title">Violin (density) plot</p>
+      <p class="card__sub">Same density estimate, mirrored — width = relative concentration of scores</p>
+      <svg id="chartViolin" viewBox="0 0 560 300"></svg>
+    </div>
+
+    <div class="card">
+      <p class="card__title">Box plot</p>
+      <p class="card__sub">Median, interquartile range, 1.5×IQR whiskers, and outliers</p>
+      <svg id="chartBox" viewBox="0 0 560 300"></svg>
+    </div>
+
+    <div class="card">
+      <p class="card__title">Strip plot</p>
+      <p class="card__sub">Every student as one point along the score axis (jittered vertically only to reduce overlap)</p>
+      <svg id="chartStrip" viewBox="0 0 560 300"></svg>
+    </div>
+
+    <div class="card card--wide">
+      <p class="card__title">Sorted scores by rank</p>
+      <p class="card__sub">All 285 totals, sorted ascending — reveals plateaus and steep runs in the overall shape</p>
+      <svg id="chartRank" viewBox="0 0 1160 300"></svg>
+    </div>
+
+    <div class="card card--wide">
+      <p class="card__title">Consecutive-rank gap size</p>
+      <p class="card__sub">Difference between each score and the next one up, in sorted order — tall bars mark where scores are sparse</p>
+      <svg id="chartGap" viewBox="0 0 1160 260"></svg>
+    </div>
+
+    <div class="card">
+      <p class="card__title">Cumulative distribution (ECDF)</p>
+      <p class="card__sub">Share of the class at or below a given score</p>
+      <svg id="chartCdf" viewBox="0 0 560 300"></svg>
+    </div>
+
+    <div class="card">
+      <p class="card__title">Normal Q–Q plot</p>
+      <p class="card__sub">Standardised sample quantiles vs. a normal distribution — departures from the line show skew/tails</p>
+      <svg id="chartQQ" viewBox="0 0 560 300"></svg>
+    </div>
+
+    <div class="card card--wide">
+      <p class="card__title">Component averages</p>
+      <p class="card__sub">Class average on each graded component, as a share of the highest score anyone achieved on that component (aggregate only — no per-student data)</p>
+      <div id="meters"></div>
+    </div>
+  </section>
+
+  <details class="tbl">
+    <summary>View summary statistics as a table</summary>
+    <table id="statsTable"></table>
+  </details>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- data (course totals, sorted ascending; no names/rolls) ----
+  var DATA = [11.72, 12.5, 34.14, 36.47, 40.76, 41.36, 41.98, 42.39, 42.76, 43.63, 44.58, 45.06, 45.08, 45.29, 45.77, 46.9, 46.97, 47.29, 47.3, 47.33, 48.1, 48.23, 48.56, 48.81, 48.88, 49.09, 49.15, 49.35, 49.53, 49.68, 49.83, 50.2, 50.22, 50.27, 51.15, 51.22, 51.44, 51.45, 51.53, 51.71, 51.72, 51.96, 52.0, 52.08, 52.2, 52.25, 52.34, 52.39, 52.43, 52.44, 52.45, 52.62, 52.66, 52.7, 52.77, 52.91, 53.01, 53.02, 53.09, 53.42, 53.51, 53.55, 53.74, 53.75, 53.82, 53.84, 53.98, 54.09, 54.11, 54.12, 54.15, 54.18, 54.2, 54.23, 54.35, 54.38, 54.44, 54.52, 54.69, 54.76, 54.81, 55.29, 55.41, 55.57, 55.58, 55.68, 55.68, 55.79, 55.85, 56.03, 56.06, 56.13, 56.18, 56.18, 56.27, 56.3, 56.44, 56.47, 56.75, 56.75, 56.93, 56.94, 56.99, 57.1, 57.13, 57.14, 57.15, 57.18, 57.29, 57.34, 57.52, 57.68, 57.93, 58.15, 58.16, 58.18, 58.19, 58.29, 58.44, 58.73, 58.84, 58.91, 58.96, 59.04, 59.19, 59.27, 59.43, 59.44, 59.46, 59.47, 59.54, 59.55, 59.69, 59.93, 59.93, 60.1, 60.12, 60.22, 60.37, 60.37, 60.38, 60.4, 60.53, 60.55, 60.55, 60.67, 60.69, 60.75, 60.79, 60.8, 60.86, 60.89, 61.03, 61.3, 61.38, 61.47, 61.61, 61.7, 61.75, 61.79, 61.81, 61.81, 61.85, 61.87, 61.93, 61.94, 62.0, 62.01, 62.16, 62.22, 62.26, 62.3, 62.31, 62.32, 62.4, 62.53, 62.73, 62.97, 63.16, 63.2, 63.28, 63.32, 63.55, 63.69, 63.73, 63.84, 63.91, 63.95, 64.06, 64.09, 64.14, 64.16, 64.2, 64.27, 64.31, 64.49, 64.5, 64.5, 64.55, 64.56, 64.59, 64.78, 64.84, 64.91, 65.29, 65.31, 65.33, 65.33, 65.36, 65.37, 65.45, 65.46, 65.51, 65.75, 65.83, 66.01, 66.15, 66.46, 66.5, 66.67, 66.95, 66.97, 67.05, 67.1, 67.14, 67.17, 67.2, 67.21, 67.28, 67.55, 67.71, 67.74, 67.82, 67.98, 68.17, 68.29, 68.38, 68.43, 68.67, 68.78, 68.83, 68.83, 69.21, 69.3, 69.34, 69.52, 69.53, 69.66, 69.72, 69.89, 70.01, 70.15, 70.67, 70.68, 71.0, 71.09, 71.14, 71.2, 71.27, 71.31, 71.55, 71.62, 71.7, 72.17, 72.41, 72.43, 72.49, 72.5, 72.58, 73.15, 73.2, 73.51, 74.04, 74.3, 74.67, 74.78, 75.76, 76.6, 76.71, 76.84, 77.35, 79.77, 79.97, 83.01, 83.17];
+  DATA.sort(function (a, b) { return a - b; });
+  var n = DATA.length;
+
+  // ---- basic stats ----
+  function mean(a) { return a.reduce(function (s, x) { return s + x; }, 0) / a.length; }
+  function sampleStd(a) {
+    var m = mean(a);
+    var v = a.reduce(function (s, x) { return s + (x - m) * (x - m); }, 0) / (a.length - 1);
+    return Math.sqrt(v);
+  }
+  function quantile(sorted, p) {
+    var h = (sorted.length - 1) * p;
+    var lo = Math.floor(h), hi = Math.ceil(h);
+    return sorted[lo] + (h - lo) * (sorted[hi] - sorted[lo]);
+  }
+  var M = mean(DATA);
+  var SD = sampleStd(DATA);
+  var MED = quantile(DATA, 0.5);
+  var Q1 = quantile(DATA, 0.25);
+  var Q3 = quantile(DATA, 0.75);
+  var IQR = Q3 - Q1;
+  var MIN = DATA[0], MAX = DATA[n - 1];
+
+  function fmt(x, d) { return x.toFixed(d === undefined ? 2 : d); }
+
+  // ---- stat tiles ----
+  var tiles = [
+    ["n", n, 0],
+    ["Mean", M, 2],
+    ["Median", MED, 2],
+    ["Std dev", SD, 2],
+    ["Min", MIN, 2],
+    ["Max", MAX, 2],
+    ["Q1", Q1, 2],
+    ["Q3", Q3, 2],
+    ["IQR", IQR, 2],
+    ["Range", MAX - MIN, 2]
+  ];
+  document.getElementById("tiles").innerHTML = tiles.map(function (t) {
+    return '<div class="tile"><p class="tile__label">' + t[0] + '</p><p class="tile__value">' + fmt(t[1], t[2]) + '</p></div>';
+  }).join("");
+
+  var tbl = '<tr><th>Statistic</th><th>Value</th></tr>' + tiles.map(function (t) {
+    return "<tr><td>" + t[0] + "</td><td>" + fmt(t[1], t[2]) + "</td></tr>";
+  }).join("");
+  document.getElementById("statsTable").innerHTML = tbl;
+
+  // ---- tooltip ----
+  var ttEl = document.getElementById("tooltip");
+  function showTT(x, y, html) {
+    ttEl.innerHTML = html;
+    ttEl.style.left = x + "px";
+    ttEl.style.top = y + "px";
+    ttEl.classList.add("show");
+  }
+  function hideTT() { ttEl.classList.remove("show"); }
+
+  // ---- scale helper ----
+  function scaleLinear(domain, range) {
+    var d0 = domain[0], d1 = domain[1], r0 = range[0], r1 = range[1];
+    var f = function (v) { return r0 + (v - d0) / (d1 - d0) * (r1 - r0); };
+    f.invert = function (v) { return d0 + (v - r0) / (r1 - r0) * (d1 - d0); };
+    return f;
+  }
+  function ticks(min, max, count) {
+    var out = [];
+    for (var i = 0; i < count; i++) out.push(min + (max - min) * i / (count - 1));
+    return out;
+  }
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  // ---- gaussian kde ----
+  function kde(data, bandwidth, grid) {
+    var n = data.length;
+    var c = 1 / (n * bandwidth * Math.sqrt(2 * Math.PI));
+    return grid.map(function (x) {
+      var s = 0;
+      for (var i = 0; i < n; i++) {
+        var z = (x - data[i]) / bandwidth;
+        s += Math.exp(-0.5 * z * z);
+      }
+      return { x: x, y: c * s };
+    });
+  }
+  var bw = 0.9 * Math.min(SD, IQR / 1.34) * Math.pow(n, -0.2);
+  var kdeGridArr = (function () {
+    var out = [], steps = 200, lo = MIN - 3 * bw, hi = MAX + 3 * bw;
+    for (var i = 0; i <= steps; i++) out.push(lo + (hi - lo) * i / steps);
+    return out;
+  })();
+  var density = kde(DATA, bw, kdeGridArr);
+  var maxDensity = Math.max.apply(null, density.map(function (d) { return d.y; }));
+
+  // ---- inverse normal CDF (Acklam's rational approximation) ----
+  function invNorm(p) {
+    var a1 = -3.969683028665376e+01, a2 = 2.209460984245205e+02, a3 = -2.759285104469687e+02,
+        a4 = 1.383577518672690e+02, a5 = -3.066479806614716e+01, a6 = 2.506628277459239e+00;
+    var b1 = -5.447609879822406e+01, b2 = 1.615858368580409e+02, b3 = -1.556989798598866e+02,
+        b4 = 6.680131188771972e+01, b5 = -1.328068155288572e+01;
+    var c1 = -7.784894002430293e-03, c2 = -3.223964580411365e-01, c3 = -2.400758277161838e+00,
+        c4 = -2.549732539343734e+00, c5 = 4.374664141464968e+00, c6 = 2.938163982698783e+00;
+    var d1 = 7.784695709041462e-03, d2 = 3.224671290700398e-01, d3 = 2.445134137142996e+00,
+        d4 = 3.754408661907416e+00;
+    var pLow = 0.02425, q, r;
+    if (p < pLow) {
+      q = Math.sqrt(-2 * Math.log(p));
+      return (((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
+             ((((d1 * q + d2) * q + d3) * q + d4) * q + 1);
+    } else if (p <= 1 - pLow) {
+      q = p - 0.5; r = q * q;
+      return (((((a1 * r + a2) * r + a3) * r + a4) * r + a5) * r + a6) * q /
+             (((((b1 * r + b2) * r + b3) * r + b4) * r + b5) * r + 1);
+    } else {
+      q = Math.sqrt(-2 * Math.log(1 - p));
+      return -(((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
+              ((((d1 * q + d2) * q + d3) * q + d4) * q + 1);
+    }
+  }
+
+  // ================= HISTOGRAM + density =================
+  var histBinWidth = 5;
+  function drawHist() {
+    var svg = document.getElementById("chartHist");
+    svg.innerHTML = "";
+    var W = 560, H = 300, m = { l: 36, r: 10, t: 10, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+
+    var lo = Math.floor(MIN / histBinWidth) * histBinWidth;
+    var hi = Math.ceil(MAX / histBinWidth) * histBinWidth;
+    var bins = [];
+    for (var x0 = lo; x0 < hi; x0 += histBinWidth) {
+      var x1 = x0 + histBinWidth;
+      var count = DATA.filter(function (v) { return v >= x0 && (v < x1 || x1 === hi); }).length;
+      bins.push({ x0: x0, x1: x1, count: count });
+    }
+    var maxCount = Math.max.apply(null, bins.map(function (b) { return b.count; }));
+
+    var xs = scaleLinear([lo, hi], [m.l, m.l + innerW]);
+    var ys = scaleLinear([0, maxCount], [m.t + innerH, m.t]);
+    var ysDensity = scaleLinear([0, maxDensity], [m.t + innerH, m.t]);
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    // gridlines + y ticks
+    ticks(0, maxCount, 5).forEach(function (t) {
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: ys(t), y2: ys(t), class: "grid-line" }));
+      var lbl = svgEl("text", { x: m.l - 8, y: ys(t) + 3, "text-anchor": "end" });
+      lbl.textContent = Math.round(t);
+      g.appendChild(lbl);
+    });
+    g.appendChild(svgEl("line", { x1: m.l, x2: m.l, y1: m.t, y2: m.t + innerH, class: "axis-line" }));
+    g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: m.t + innerH, y2: m.t + innerH, class: "axis-line" }));
+
+    // x ticks
+    ticks(lo, hi, 6).forEach(function (t) {
+      var lbl = svgEl("text", { x: xs(t), y: m.t + innerH + 18, "text-anchor": "middle" });
+      lbl.textContent = Math.round(t);
+      g.appendChild(lbl);
+    });
+
+    // bars
+    bins.forEach(function (b) {
+      var bx = xs(b.x0) + 1, bw2 = (xs(b.x1) - xs(b.x0)) - 2;
+      var by = ys(b.count);
+      var rect = svgEl("rect", {
+        x: bx, y: by, width: Math.max(bw2, 1), height: (m.t + innerH) - by,
+        rx: 3, class: "mark-bar", opacity: 0.85
+      });
+      g.appendChild(rect);
+      var hit = svgEl("rect", { x: bx - 1, y: m.t, width: bw2 + 2, height: innerH, class: "hover-rect" });
+      hit.addEventListener("mousemove", function (ev) {
+        showTT(ev.clientX, ev.clientY,
+          '<span class="tt-strong">' + b.count + ' student' + (b.count === 1 ? "" : "s") + '</span><br>' +
+          fmt(b.x0, 1) + '–' + fmt(b.x1, 1));
+      });
+      hit.addEventListener("mouseleave", hideTT);
+      g.appendChild(hit);
+    });
+
+    // density overlay, rescaled to the count axis for visual overlay
+    var path = density.map(function (d, i) {
+      var yCount = (d.y / maxDensity) * maxCount;
+      return (i === 0 ? "M" : "L") + xs(d.x).toFixed(2) + "," + ys(yCount).toFixed(2);
+    }).join(" ");
+    g.appendChild(svgEl("path", { d: path, class: "mark-line", opacity: 0.9 }));
+  }
+
+  document.getElementById("histControls").innerHTML =
+    [2, 5, 10].map(function (w) {
+      return '<button data-w="' + w + '"' + (w === histBinWidth ? ' class="is-active"' : '') + '>' + w + '-pt bins</button>';
+    }).join("");
+  document.getElementById("histControls").addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button");
+    if (!btn) return;
+    histBinWidth = Number(btn.dataset.w);
+    Array.prototype.forEach.call(document.querySelectorAll("#histControls button"), function (b) {
+      b.classList.toggle("is-active", b === btn);
+    });
+    drawHist();
+  });
+
+  // ================= VIOLIN =================
+  function drawViolin() {
+    var svg = document.getElementById("chartViolin");
+    svg.innerHTML = "";
+    var W = 560, H = 300, m = { l: 36, r: 36, t: 14, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+    var cx = m.l + innerW / 2;
+
+    var ys = scaleLinear([MIN - 3 * bw, MAX + 3 * bw], [m.t + innerH, m.t]);
+    var xs = scaleLinear([0, maxDensity], [0, innerW / 2 - 4]);
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    ticks(MIN, MAX, 5).forEach(function (t) {
+      var yy = ys(t);
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: yy, y2: yy, class: "grid-line" }));
+      var lbl = svgEl("text", { x: m.l + innerW + 6, y: yy + 3 });
+      lbl.textContent = fmt(t, 1);
+      g.appendChild(lbl);
+    });
+
+    var right = density.map(function (d, i) {
+      return (i === 0 ? "M" : "L") + (cx + xs(d.y)).toFixed(2) + "," + ys(d.x).toFixed(2);
+    }).join(" ");
+    var left = density.slice().reverse().map(function (d) {
+      return "L" + (cx - xs(d.y)).toFixed(2) + "," + ys(d.x).toFixed(2);
+    }).join(" ");
+    g.appendChild(svgEl("path", { d: right + " " + left + " Z", class: "mark-fill" }));
+    g.appendChild(svgEl("path", { d: right, class: "mark-line" }));
+    g.appendChild(svgEl("path", {
+      d: density.slice().reverse().map(function (d, i) {
+        return (i === 0 ? "M" : "L") + (cx - xs(d.y)).toFixed(2) + "," + ys(d.x).toFixed(2);
+      }).join(" "), class: "mark-line"
+    }));
+
+    // median reference tick
+    var medY = ys(MED);
+    g.appendChild(svgEl("line", { x1: cx - innerW / 2 + 4, x2: cx + innerW / 2 - 4, y1: medY, y2: medY, class: "ref-line" }));
+    var lbl = svgEl("text", { x: cx + innerW / 2 - 4, y: medY - 5, "text-anchor": "end" });
+    lbl.textContent = "median " + fmt(MED, 1);
+    g.appendChild(lbl);
+
+    var hit = svgEl("rect", { x: m.l, y: m.t, width: innerW, height: innerH, class: "hover-rect" });
+    hit.addEventListener("mousemove", function (ev) {
+      var rect = svg.getBoundingClientRect();
+      var yFrac = (ev.clientY - rect.top) / rect.height * H;
+      var val = ys.invert(yFrac);
+      showTT(ev.clientX, ev.clientY, '<span class="tt-strong">' + fmt(val, 1) + '</span><br>score level');
+    });
+    hit.addEventListener("mouseleave", hideTT);
+    g.appendChild(hit);
+  }
+
+  // ================= BOX PLOT =================
+  function drawBox() {
+    var svg = document.getElementById("chartBox");
+    svg.innerHTML = "";
+    var W = 560, H = 300, m = { l: 36, r: 16, t: 20, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+
+    var lowFence = Q1 - 1.5 * IQR, highFence = Q3 + 1.5 * IQR;
+    var within = DATA.filter(function (v) { return v >= lowFence && v <= highFence; });
+    var whiskerLo = Math.min.apply(null, within), whiskerHi = Math.max.apply(null, within);
+    var outliers = DATA.filter(function (v) { return v < lowFence || v > highFence; });
+
+    var ys = scaleLinear([MIN - 1, MAX + 1], [m.t + innerH, m.t]);
+    var cx = m.l + innerW / 2, boxHalf = 70;
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    ticks(MIN, MAX, 6).forEach(function (t) {
+      var yy = ys(t);
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: yy, y2: yy, class: "grid-line" }));
+      var lbl = svgEl("text", { x: m.l - 8, y: yy + 3, "text-anchor": "end" });
+      lbl.textContent = fmt(t, 1);
+      g.appendChild(lbl);
+    });
+
+    // whiskers
+    g.appendChild(svgEl("line", { x1: cx, x2: cx, y1: ys(whiskerLo), y2: ys(Q1), class: "mark-line" }));
+    g.appendChild(svgEl("line", { x1: cx, x2: cx, y1: ys(Q3), y2: ys(whiskerHi), class: "mark-line" }));
+    g.appendChild(svgEl("line", { x1: cx - 18, x2: cx + 18, y1: ys(whiskerLo), y2: ys(whiskerLo), class: "mark-line" }));
+    g.appendChild(svgEl("line", { x1: cx - 18, x2: cx + 18, y1: ys(whiskerHi), y2: ys(whiskerHi), class: "mark-line" }));
+
+    // box
+    g.appendChild(svgEl("rect", {
+      x: cx - boxHalf, y: ys(Q3), width: boxHalf * 2, height: ys(Q1) - ys(Q3),
+      class: "mark-fill", stroke: "var(--series-1)", "stroke-width": 2, rx: 4
+    }));
+    // median line
+    g.appendChild(svgEl("line", { x1: cx - boxHalf, x2: cx + boxHalf, y1: ys(MED), y2: ys(MED), class: "mark-line" }));
+
+    // outliers
+    outliers.forEach(function (v) {
+      var dot = svgEl("circle", { cx: cx, cy: ys(v), r: 4, class: "mark-dot" });
+      dot.addEventListener("mousemove", function (ev) {
+        showTT(ev.clientX, ev.clientY, '<span class="tt-strong">' + fmt(v, 2) + '</span><br>outlier (beyond 1.5×IQR)');
+      });
+      dot.addEventListener("mouseleave", hideTT);
+      g.appendChild(dot);
+    });
+
+    [["Q3", Q3], ["Median", MED], ["Q1", Q1], ["Upper whisker", whiskerHi], ["Lower whisker", whiskerLo]].forEach(function (p) {
+      var row = svgEl("rect", { x: cx - boxHalf - 60, y: ys(p[1]) - 7, width: 1, height: 1, opacity: 0 });
+      g.appendChild(row);
+    });
+
+    var hitBox = svgEl("rect", { x: cx - boxHalf, y: ys(Q3), width: boxHalf * 2, height: ys(Q1) - ys(Q3), class: "hover-rect" });
+    hitBox.addEventListener("mousemove", function (ev) {
+      showTT(ev.clientX, ev.clientY,
+        '<span class="tt-strong">Q1 ' + fmt(Q1, 1) + ' · median ' + fmt(MED, 1) + ' · Q3 ' + fmt(Q3, 1) + '</span><br>IQR ' + fmt(IQR, 1));
+    });
+    hitBox.addEventListener("mouseleave", hideTT);
+    g.appendChild(hitBox);
+  }
+
+  // ================= STRIP PLOT =================
+  function drawStrip() {
+    var svg = document.getElementById("chartStrip");
+    svg.innerHTML = "";
+    var W = 560, H = 300, m = { l: 20, r: 20, t: 20, b: 40 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+    var xs = scaleLinear([MIN - 1, MAX + 1], [m.l, m.l + innerW]);
+    var midY = m.t + innerH / 2;
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    ticks(MIN, MAX, 6).forEach(function (t) {
+      var lbl = svgEl("text", { x: xs(t), y: m.t + innerH + 18, "text-anchor": "middle" });
+      lbl.textContent = fmt(t, 1);
+      g.appendChild(lbl);
+    });
+    g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: midY, y2: midY, class: "axis-line" }));
+
+    // deterministic pseudo-random jitter so layout is stable across renders
+    function jitterFor(i) {
+      var s = Math.sin(i * 12.9898) * 43758.5453;
+      return s - Math.floor(s);
+    }
+    DATA.forEach(function (v, i) {
+      var j = (jitterFor(i) - 0.5) * (innerH - 24);
+      var cx = xs(v), cy = midY + j;
+      var dot = svgEl("circle", { cx: cx, cy: cy, r: 4, class: "mark-dot" });
+      g.appendChild(dot);
+      var hit = svgEl("circle", { cx: cx, cy: cy, r: 12, class: "hover-rect", style: "fill:transparent" });
+      hit.addEventListener("mousemove", function (ev) {
+        showTT(ev.clientX, ev.clientY, '<span class="tt-strong">' + fmt(v, 2) + '</span>');
+      });
+      hit.addEventListener("mouseleave", hideTT);
+      g.appendChild(hit);
+    });
+  }
+
+  // ================= RANK (sorted) =================
+  function drawRank() {
+    var svg = document.getElementById("chartRank");
+    svg.innerHTML = "";
+    var W = 1160, H = 300, m = { l: 44, r: 16, t: 14, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+    var xs = scaleLinear([1, n], [m.l, m.l + innerW]);
+    var ys = scaleLinear([MIN - 1, MAX + 1], [m.t + innerH, m.t]);
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    ticks(MIN, MAX, 6).forEach(function (t) {
+      var yy = ys(t);
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: yy, y2: yy, class: "grid-line" }));
+      var lbl = svgEl("text", { x: m.l - 8, y: yy + 3, "text-anchor": "end" });
+      lbl.textContent = fmt(t, 1);
+      g.appendChild(lbl);
+    });
+    [1, Math.round(n / 4), Math.round(n / 2), Math.round(3 * n / 4), n].forEach(function (t) {
+      var lbl = svgEl("text", { x: xs(t), y: m.t + innerH + 18, "text-anchor": "middle" });
+      lbl.textContent = t;
+      g.appendChild(lbl);
+    });
+
+    var path = DATA.map(function (v, i) {
+      return (i === 0 ? "M" : "L") + xs(i + 1).toFixed(2) + "," + ys(v).toFixed(2);
+    }).join(" ");
+    var area = path + " L" + xs(n).toFixed(2) + "," + ys(MIN - 1).toFixed(2) + " L" + xs(1).toFixed(2) + "," + ys(MIN - 1).toFixed(2) + " Z";
+    g.appendChild(svgEl("path", { d: area, class: "mark-fill" }));
+    g.appendChild(svgEl("path", { d: path, class: "mark-line" }));
+
+    var cross = svgEl("line", { x1: 0, x2: 0, y1: m.t, y2: m.t + innerH, class: "crosshair" });
+    g.appendChild(cross);
+    var dot = svgEl("circle", { r: 4, class: "mark-dot" });
+    g.appendChild(dot);
+
+    var hit = svgEl("rect", { x: m.l, y: m.t, width: innerW, height: innerH, class: "hover-rect" });
+    hit.addEventListener("mousemove", function (ev) {
+      var rect = svg.getBoundingClientRect();
+      var xFrac = (ev.clientX - rect.left) / rect.width * W;
+      var rank = Math.max(1, Math.min(n, Math.round(xs.invert(xFrac))));
+      var val = DATA[rank - 1];
+      cross.setAttribute("x1", xs(rank)); cross.setAttribute("x2", xs(rank));
+      cross.setAttribute("opacity", 1);
+      dot.setAttribute("cx", xs(rank)); dot.setAttribute("cy", ys(val));
+      showTT(ev.clientX, ev.clientY, '<span class="tt-strong">' + fmt(val, 2) + '</span><br>rank ' + rank + ' of ' + n);
+    });
+    hit.addEventListener("mouseleave", function () { cross.setAttribute("opacity", 0); hideTT(); });
+    g.appendChild(hit);
+  }
+
+  // ================= GAP CHART =================
+  function drawGap() {
+    var svg = document.getElementById("chartGap");
+    svg.innerHTML = "";
+    var W = 1160, H = 260, m = { l: 44, r: 16, t: 14, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+
+    var gaps = [];
+    for (var i = 0; i < n - 1; i++) gaps.push(DATA[i + 1] - DATA[i]);
+    var maxGap = Math.max.apply(null, gaps);
+
+    var xs = scaleLinear([1, gaps.length], [m.l, m.l + innerW]);
+    var ys = scaleLinear([0, maxGap], [m.t + innerH, m.t]);
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    ticks(0, maxGap, 5).forEach(function (t) {
+      var yy = ys(t);
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: yy, y2: yy, class: "grid-line" }));
+      var lbl = svgEl("text", { x: m.l - 8, y: yy + 3, "text-anchor": "end" });
+      lbl.textContent = fmt(t, 1);
+      g.appendChild(lbl);
+    });
+    [1, Math.round(gaps.length / 2), gaps.length].forEach(function (t) {
+      var lbl = svgEl("text", { x: xs(t), y: m.t + innerH + 18, "text-anchor": "middle" });
+      lbl.textContent = "rank " + t + "→" + (t + 1);
+      g.appendChild(lbl);
+    });
+
+    var barW = Math.max(innerW / gaps.length - 1, 1);
+    gaps.forEach(function (gap, i) {
+      var bx = xs(i + 1) - barW / 2, by = ys(gap);
+      var rect = svgEl("rect", { x: bx, y: by, width: barW, height: (m.t + innerH) - by, class: "mark-bar", opacity: 0.85, rx: 1 });
+      g.appendChild(rect);
+      var hit = svgEl("rect", { x: bx - 1, y: m.t, width: barW + 2, height: innerH, class: "hover-rect" });
+      hit.addEventListener("mousemove", function (ev) {
+        showTT(ev.clientX, ev.clientY,
+          '<span class="tt-strong">gap ' + fmt(gap, 2) + '</span><br>between ' + fmt(DATA[i], 1) + ' and ' + fmt(DATA[i + 1], 1));
+      });
+      hit.addEventListener("mouseleave", hideTT);
+      g.appendChild(hit);
+    });
+  }
+
+  // ================= ECDF =================
+  function drawCdf() {
+    var svg = document.getElementById("chartCdf");
+    svg.innerHTML = "";
+    var W = 560, H = 300, m = { l: 40, r: 16, t: 14, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+    var xs = scaleLinear([MIN - 1, MAX + 1], [m.l, m.l + innerW]);
+    var ys = scaleLinear([0, 1], [m.t + innerH, m.t]);
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (t) {
+      var yy = ys(t);
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: yy, y2: yy, class: "grid-line" }));
+      var lbl = svgEl("text", { x: m.l - 8, y: yy + 3, "text-anchor": "end" });
+      lbl.textContent = Math.round(t * 100) + "%";
+      g.appendChild(lbl);
+    });
+    ticks(MIN, MAX, 6).forEach(function (t) {
+      var lbl = svgEl("text", { x: xs(t), y: m.t + innerH + 18, "text-anchor": "middle" });
+      lbl.textContent = fmt(t, 1);
+      g.appendChild(lbl);
+    });
+
+    var path = "M" + xs(MIN - 1).toFixed(2) + "," + ys(0).toFixed(2);
+    DATA.forEach(function (v, i) {
+      var p = (i + 1) / n;
+      path += " L" + xs(v).toFixed(2) + "," + ys(p).toFixed(2);
+      if (i < n - 1) path += " L" + xs(DATA[i + 1]).toFixed(2) + "," + ys(p).toFixed(2);
+    });
+    g.appendChild(svgEl("path", { d: path, class: "mark-line" }));
+
+    var cross = svgEl("line", { x1: 0, x2: 0, y1: m.t, y2: m.t + innerH, class: "crosshair" });
+    g.appendChild(cross);
+    var dot = svgEl("circle", { r: 4, class: "mark-dot" });
+    g.appendChild(dot);
+    var hit = svgEl("rect", { x: m.l, y: m.t, width: innerW, height: innerH, class: "hover-rect" });
+    hit.addEventListener("mousemove", function (ev) {
+      var rect = svg.getBoundingClientRect();
+      var xFrac = (ev.clientX - rect.left) / rect.width * W;
+      var val = xs.invert(xFrac);
+      var count = DATA.filter(function (v) { return v <= val; }).length;
+      var p = count / n;
+      cross.setAttribute("x1", xs(val)); cross.setAttribute("x2", xs(val)); cross.setAttribute("opacity", 1);
+      dot.setAttribute("cx", xs(val)); dot.setAttribute("cy", ys(p));
+      showTT(ev.clientX, ev.clientY, '<span class="tt-strong">' + Math.round(p * 100) + '%</span> of class ≤ ' + fmt(val, 1));
+    });
+    hit.addEventListener("mouseleave", function () { cross.setAttribute("opacity", 0); hideTT(); });
+    g.appendChild(hit);
+  }
+
+  // ================= Q-Q PLOT =================
+  function drawQQ() {
+    var svg = document.getElementById("chartQQ");
+    svg.innerHTML = "";
+    var W = 560, H = 300, m = { l: 40, r: 16, t: 14, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+
+    var pts = DATA.map(function (v, i) {
+      var p = (i + 0.5) / n;
+      return { theo: invNorm(p), samp: (v - M) / SD, raw: v };
+    });
+    var lim = Math.max.apply(null, pts.map(function (p) { return Math.max(Math.abs(p.theo), Math.abs(p.samp)); })) + 0.3;
+
+    var xs = scaleLinear([-lim, lim], [m.l, m.l + innerW]);
+    var ys = scaleLinear([-lim, lim], [m.t + innerH, m.t]);
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    ticks(-Math.floor(lim), Math.floor(lim), 2 * Math.floor(lim) + 1).forEach(function (t) {
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: ys(t), y2: ys(t), class: "grid-line" }));
+      g.appendChild(svgEl("line", { x1: xs(t), x2: xs(t), y1: m.t, y2: m.t + innerH, class: "grid-line" }));
+      var lblY = svgEl("text", { x: m.l - 8, y: ys(t) + 3, "text-anchor": "end" });
+      lblY.textContent = t;
+      g.appendChild(lblY);
+      var lblX = svgEl("text", { x: xs(t), y: m.t + innerH + 18, "text-anchor": "middle" });
+      lblX.textContent = t;
+      g.appendChild(lblX);
+    });
+
+    g.appendChild(svgEl("line", { x1: xs(-lim), x2: xs(lim), y1: ys(-lim), y2: ys(lim), class: "ref-line" }));
+
+    pts.forEach(function (p) {
+      var dot = svgEl("circle", { cx: xs(p.theo), cy: ys(p.samp), r: 4, class: "mark-dot" });
+      g.appendChild(dot);
+      var hit = svgEl("circle", { cx: xs(p.theo), cy: ys(p.samp), r: 12, style: "fill:transparent" });
+      hit.addEventListener("mousemove", function (ev) {
+        showTT(ev.clientX, ev.clientY, '<span class="tt-strong">' + fmt(p.raw, 2) + '</span><br>theoretical z ' + fmt(p.theo, 2) + ' · sample z ' + fmt(p.samp, 2));
+      });
+      hit.addEventListener("mouseleave", hideTT);
+      g.appendChild(hit);
+    });
+
+    var lblRef = svgEl("text", { x: xs(lim) - 4, y: ys(lim) - 6, "text-anchor": "end" });
+    lblRef.textContent = "y = x (perfectly normal)";
+    g.appendChild(lblRef);
+  }
+
+  // ================= COMPONENT AVERAGES (aggregate only) =================
+  var COMPONENTS = [
+    { name: "Theory Assignment 1", mean: 38.31, max: 40.0, n: 285 },
+    { name: "Theory Assignment 2", mean: 39.10, max: 40.0, n: 285 },
+    { name: "Quiz 1", mean: 2.93, max: 11.0, n: 285 },
+    { name: "Midsem", mean: 12.99, max: 28.0, n: 285 },
+    { name: "Programming Assignment", mean: 140.72, max: 150.0, n: 285 },
+    { name: "Midsem Bonus", mean: 0.13, max: 10.0, n: 275 }
+  ];
+  function renderMeters() {
+    document.getElementById("meters").innerHTML = COMPONENTS.map(function (c) {
+      var pct = Math.max(0, Math.min(100, (c.mean / c.max) * 100));
+      return '<div class="meter">' +
+        '<div class="meter__head"><span class="meter__name">' + c.name + '</span>' +
+        '<span class="meter__value">' + fmt(c.mean, 2) + ' / ' + fmt(c.max, 1) + ' (class high) · n=' + c.n + '</span></div>' +
+        '<div class="meter__track"><div class="meter__fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+        '</div>';
+    }).join("");
+  }
+
+  // ================= GRADE-BUCKET EXPLORER (cutoff tool) =================
+  var cutoffs = [];
+  function addCutoffDefault() {
+    var k = cutoffs.length;
+    var p = (k + 1) / (k + 2);
+    var v = Math.round(quantile(DATA, p) * 10) / 10;
+    while (cutoffs.indexOf(v) !== -1) v += 0.1;
+    cutoffs.push(v);
+    cutoffs.sort(function (a, b) { return a - b; });
+    drawCutoffTool();
+  }
+  document.getElementById("addCutoff").addEventListener("click", addCutoffDefault);
+
+  function drawCutoffTool() {
+    var svg = document.getElementById("chartCutoff");
+    svg.innerHTML = "";
+    var W = 1160, H = 260, m = { l: 44, r: 16, t: 30, b: 30 };
+    var innerW = W - m.l - m.r, innerH = H - m.t - m.b;
+
+    var binW = 2.5;
+    var lo = Math.floor(MIN / binW) * binW, hi = Math.ceil(MAX / binW) * binW;
+    var bins = [];
+    for (var x0 = lo; x0 < hi; x0 += binW) {
+      var x1 = x0 + binW;
+      var count = DATA.filter(function (v) { return v >= x0 && (v < x1 || x1 === hi); }).length;
+      bins.push({ x0: x0, x1: x1, count: count });
+    }
+    var maxCount = Math.max.apply(null, bins.map(function (b) { return b.count; }));
+
+    var xs = scaleLinear([lo, hi], [m.l, m.l + innerW]);
+    var ys = scaleLinear([0, maxCount], [m.t + innerH, m.t]);
+
+    var g = svgEl("g", {});
+    svg.appendChild(g);
+
+    ticks(0, maxCount, 4).forEach(function (t) {
+      g.appendChild(svgEl("line", { x1: m.l, x2: m.l + innerW, y1: ys(t), y2: ys(t), class: "grid-line" }));
+      var lbl = svgEl("text", { x: m.l - 8, y: ys(t) + 3, "text-anchor": "end" });
+      lbl.textContent = Math.round(t);
+      g.appendChild(lbl);
+    });
+    ticks(lo, hi, 8).forEach(function (t) {
+      var lbl = svgEl("text", { x: xs(t), y: m.t + innerH + 18, "text-anchor": "middle" });
+      lbl.textContent = fmt(t, 0);
+      g.appendChild(lbl);
+    });
+
+    bins.forEach(function (b) {
+      var bx = xs(b.x0) + 1, bw2 = (xs(b.x1) - xs(b.x0)) - 2;
+      var by = ys(b.count);
+      g.appendChild(svgEl("rect", {
+        x: bx, y: by, width: Math.max(bw2, 1), height: (m.t + innerH) - by,
+        rx: 2, class: "mark-bar", opacity: 0.55
+      }));
+    });
+
+    cutoffs.forEach(function (c, i) {
+      var cx = xs(c);
+      g.appendChild(svgEl("line", { x1: cx, x2: cx, y1: m.t, y2: m.t + innerH, class: "cutoff-line" }));
+      var lbl = svgEl("text", { x: cx, y: m.t - 10, "text-anchor": "middle", class: "cutoff-label" });
+      lbl.textContent = fmt(c, 1);
+      g.appendChild(lbl);
+
+      var handle = svgEl("g", { class: "cutoff-handle" });
+      handle.appendChild(svgEl("circle", { cx: cx, cy: m.t + innerH + 8, r: 7 }));
+      g.appendChild(handle);
+
+      var dragging = false;
+      function onMove(ev) {
+        if (!dragging) return;
+        var rect = svg.getBoundingClientRect();
+        var clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+        var xFrac = (clientX - rect.left) / rect.width * W;
+        var val = Math.max(MIN, Math.min(MAX, xs.invert(xFrac)));
+        cutoffs[i] = Math.round(val * 10) / 10;
+        drawCutoffTool();
+      }
+      function onUp() {
+        dragging = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      }
+      handle.addEventListener("pointerdown", function (ev) {
+        dragging = true;
+        ev.preventDefault();
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+      });
+    });
+
+    renderBucketTable();
+  }
+
+  var bucketLabels = {};
+  function renderBucketTable() {
+    var bounds = [MIN - 0.001].concat(cutoffs.slice().sort(function (a, b) { return a - b; })).concat([MAX + 0.001]);
+    var rows = ['<tr><th>Bucket range</th><th>Students</th><th>% of class</th><th>Label (optional)</th><th></th></tr>'];
+    for (var i = 0; i < bounds.length - 1; i++) {
+      var lo2 = bounds[i], hi2 = bounds[i + 1];
+      var count = DATA.filter(function (v) { return v >= lo2 && v < hi2; }).length;
+      if (i === bounds.length - 2) count = DATA.filter(function (v) { return v >= lo2; }).length;
+      var pct = (count / n * 100).toFixed(1);
+      var loTxt = i === 0 ? fmt(MIN, 1) : fmt(cutoffs[i - 1], 1);
+      var hiTxt = i === bounds.length - 2 ? fmt(MAX, 1) : fmt(cutoffs[i], 1);
+      var key = "b" + i;
+      rows.push('<tr><td>' + loTxt + '–' + hiTxt + '</td><td>' + count + '</td><td>' + pct + '%</td>' +
+        '<td><input type="text" data-key="' + key + '" placeholder="optional label" value="' + (bucketLabels[key] || "") + '" /></td>' +
+        '<td>' + (i < cutoffs.length ? '<button type="button" class="rm" data-i="' + i + '">remove cutoff</button>' : '') + '</td></tr>');
+    }
+    var tbl = document.getElementById("bucketTable");
+    tbl.innerHTML = rows.join("");
+    Array.prototype.forEach.call(tbl.querySelectorAll("input[data-key]"), function (inp) {
+      inp.addEventListener("input", function () { bucketLabels[inp.dataset.key] = inp.value; });
+    });
+    Array.prototype.forEach.call(tbl.querySelectorAll("button.rm"), function (btn) {
+      btn.addEventListener("click", function () {
+        cutoffs.splice(Number(btn.dataset.i), 1);
+        drawCutoffTool();
+      });
+    });
+  }
+
+  drawHist();
+  drawViolin();
+  drawBox();
+  drawStrip();
+  drawRank();
+  drawGap();
+  drawCdf();
+  drawQQ();
+  drawCutoffTool();
+  renderMeters();
+
+  window.addEventListener("resize", function () {
+    drawHist(); drawViolin(); drawBox(); drawStrip(); drawRank(); drawGap(); drawCdf(); drawQQ(); drawCutoffTool();
+  });
+})();
+</script>
+</body>
+</html>
